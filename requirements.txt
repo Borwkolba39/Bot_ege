@@ -1,4 +1,12 @@
-aiogram==3.13.1
+# aiogram 3.x с совместимыми версиями зависимостей
+aiogram==3.4.1
+magic-filter==1.0.12
+aiohttp==3.9.1
 python-dotenv==1.0.1
-# aiohttp подтянется автоматически зависимостью aiogram, но можно оставить явно:
-# aiohttp>=3.9.0
+
+# Явно указываем pydantic без Rust-зависимостей
+pydantic==2.5.2
+pydantic-core==2.14.5
+
+# Форсируем использование готовых wheel-пакетов
+--only-binary :all:
