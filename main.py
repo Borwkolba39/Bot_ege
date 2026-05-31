@@ -17,6 +17,7 @@ ADMIN_ID = os.getenv("ADMIN_ID")
 FORM_URL = os.getenv("FORM_URL")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.getenv("PORT", 8000))
+CHANNEL_URL = "https://t.me/repetitor_inf100" # Ваш канал
 
 if not BOT_TOKEN:
     raise ValueError("BOT_TOKEN не найден в переменных окружения")
@@ -24,7 +25,8 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-#  Клавиатура с кнопкой "Начать" (Reply Keyboard)
+# Клавиатура с кнопкой "Начать" (Reply Keyboard)
+# Важно: текст должен совпадать ТОЧНО с тем, что видит пользователь
 start_keyboard = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🚀 Начать")]
@@ -40,22 +42,21 @@ async def set_webhook_on_start(bot: Bot):
         await bot.set_webhook(WEBHOOK_URL, allowed_updates=dp.resolve_used_update_types())
         logger.info(f"✅ Webhook установлен на {WEBHOOK_URL}")
     else:
-        logger.warning("️ WEBHOOK_URL не указан.")
+        logger.warning("⚠️ WEBHOOK_URL не указан.")
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
     # Inline-кнопки
-    # Внимание: кнопка диагностики теперь вызывает callback 'get_checklist'
     inline_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📝 Получить чек-лист и форму", callback_data="get_checklist")],
-        [InlineKeyboardButton(text=" Канал с материалами", url="https://t.me/ваш_канал")]
+        [InlineKeyboardButton(text="📢 Канал с материалами", url=CHANNEL_URL)]
     ])
     
     user_name = message.from_user.full_name or "пользователь"
     text = (
         f"Привет, {user_name}! 👋\n"
         "Я бот-помощник репетитора по информатике.\n"
-        "🎯 Нажми кнопку ниже, чтобы получить чек-лист 'Топ-5 ошибок в Задаче 8' и пройти диагностику."
+        " Нажми кнопку ниже, чтобы получить чек-лист 'Топ-5 ошибок в Задаче 8' и пройти диагностику."
     )
     
     await message.answer(text, reply_markup=start_keyboard)
@@ -76,39 +77,46 @@ async def cmd_start(message: Message):
 # Обработчик нажатия на кнопку "Получить чек-лист"
 @dp.callback_query(lambda c: c.data == "get_checklist")
 async def send_checklist_and_form(callback: CallbackQuery):
-    # Путь к картинке внутри Docker-контейнера
     image_path = "8.png" 
     
     try:
-        # Отправляем фото
+        # Проверяем существование файла перед отправкой
+        if not os.path.exists(image_path):
+            raise FileNotFoundError(f"Файл {image_path} не найден в директории {os.getcwd()}")
+
         with open(image_path, "rb") as photo:
             await callback.message.answer_photo(
                 photo=photo,
                 caption=(
-                    " Вот превью чек-листа «Топ-5 ошибок в Задаче 8»!\n\n"
+                    "📸 Вот превью чек-листа «Топ-5 ошибок в Задаче 8»!\n\n"
                     "Чтобы получить полный PDF-разбор и записаться на бесплатную диагностику, "
                     "перейди по кнопке ниже 👇"
                 ),
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="📝 Открыть форму диагностики", url=FORM_URL)]
+                    [InlineKeyboardButton(text=" Открыть форму диагностики", url=FORM_URL)]
                 ])
             )
         
-        # Удаляем сообщение с кнопкой, чтобы не дублировать интерфейс (опционально)
+        # Убираем "часики" загрузки на кнопке
         await callback.answer() 
         
-    except FileNotFoundError:
-        logger.error("Картинка 8.png не найдена!")
-        await callback.message.answer("Извините, картинка временно недоступна. Но вы можете заполнить форму:")
+    except FileNotFoundError as e:
+        logger.error(str(e))
+        await callback.message.answer("❌ Извините, картинка временно недоступна (ошибка сервера). Но вы можете заполнить форму:")
         await callback.message.answer("📝 Форма диагностики", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Заполнить форму", url=FORM_URL)]
         ]))
         await callback.answer()
+    except Exception as e:
+        logger.error(f"Неизвестная ошибка при отправке фото: {e}")
+        await callback.answer("Произошла ошибка. Попробуйте позже.", show_alert=True)
 
+# Обработчик нажатия на кнопку "🚀 Начать"
 @dp.message(lambda msg: msg.text == " Начать")
 async def handle_start_button(message: Message):
     await cmd_start(message)
 
+# Обработчик всех остальных сообщений (fallback)
 @dp.message(~Command("start"))
 async def fallback(message: Message):
     await message.answer("Используйте команду /start или кнопку 🚀 Начать.", reply_markup=start_keyboard)
