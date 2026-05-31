@@ -47,7 +47,7 @@ async def cmd_start(message: Message):
     # Inline-кнопки для действий (ссылки)
     inline_kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="📝 Пройти диагностику", url=FORM_URL)],
-        [InlineKeyboardButton(text="📢 Канал с материалами", url="https://t.me/ваш_канал")]
+        [InlineKeyboardButton(text="📢 Канал с материалами", url="https://t.me/repetitor_inf100")]
     ])
     
     user_name = message.from_user.full_name or "пользователь"
@@ -82,7 +82,7 @@ async def handle_start_button(message: Message):
 
 @dp.message(~Command("start"))
 async def fallback(message: Message):
-    await message.answer("Используйте команду /start или кнопку 🚀 Начать для главного меню.", reply_markup=start_keyboard)
+    await message.answer("Используйте команду /start или кнопку 🚀 Бесплатная диагностика для главного меню.", reply_markup=start_keyboard)
 
 async def main():
     app = web.Application()
