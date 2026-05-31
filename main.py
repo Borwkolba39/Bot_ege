@@ -77,7 +77,7 @@ async def cmd_start(message: Message):
 @dp.callback_query(lambda c: c.data == "get_checklist")
 async def send_checklist_and_form(callback: CallbackQuery):
     # Путь к картинке внутри Docker-контейнера
-    image_path = "task8_errors.jpg" 
+    image_path = "8.png" 
     
     try:
         # Отправляем фото
@@ -98,7 +98,7 @@ async def send_checklist_and_form(callback: CallbackQuery):
         await callback.answer() 
         
     except FileNotFoundError:
-        logger.error("Картинка task8_errors.jpg не найдена!")
+        logger.error("Картинка 8.png не найдена!")
         await callback.message.answer("Извините, картинка временно недоступна. Но вы можете заполнить форму:")
         await callback.message.answer("📝 Форма диагностики", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="Заполнить форму", url=FORM_URL)]
