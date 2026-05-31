@@ -2,7 +2,7 @@ import os
 import logging
 from aiogram import Bot, Dispatcher
 from aiogram.filters import Command
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, ReplyKeyboardMarkup, KeyboardButton, CallbackQuery
 from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 from aiohttp import web
 import asyncio
@@ -24,13 +24,13 @@ if not BOT_TOKEN:
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# 🔘 Клавиатура с кнопкой "Начать" (появляется внизу чата)
+#  Клавиатура с кнопкой "Начать" (Reply Keyboard)
 start_keyboard = ReplyKeyboardMarkup(
     keyboard=[
-        [KeyboardButton(text="🎯 Бесплатная диагностика")]
+        [KeyboardButton(text="🚀 Начать")]
     ],
-    resize_keyboard=True,  # Кнопка компактная
-    one_time_keyboard=True,  # Скрыть после первого нажатия (опционально)
+    resize_keyboard=True,
+    one_time_keyboard=True,
     input_field_placeholder="Выберите действие 👇"
 )
 
@@ -40,26 +40,24 @@ async def set_webhook_on_start(bot: Bot):
         await bot.set_webhook(WEBHOOK_URL, allowed_updates=dp.resolve_used_update_types())
         logger.info(f"✅ Webhook установлен на {WEBHOOK_URL}")
     else:
-        logger.warning("⚠️ WEBHOOK_URL не указан. Webhook не будет установлен.")
+        logger.warning("️ WEBHOOK_URL не указан.")
 
 @dp.message(Command("start"))
 async def cmd_start(message: Message):
-    # Inline-кнопки для действий (ссылки)
+    # Inline-кнопки
+    # Внимание: кнопка диагностики теперь вызывает callback 'get_checklist'
     inline_kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="📝 Пройти диагностику", url=FORM_URL)],
-        [InlineKeyboardButton(text="📢 Канал с материалами", url="https://t.me/repetitor_inf100")]
+        [InlineKeyboardButton(text="📝 Получить чек-лист и форму", callback_data="get_checklist")],
+        [InlineKeyboardButton(text=" Канал с материалами", url="https://t.me/ваш_канал")]
     ])
     
     user_name = message.from_user.full_name or "пользователь"
     text = (
         f"Привет, {user_name}! 👋\n"
         "Я бот-помощник репетитора по информатике.\n"
-        "🎯 Бесплатная диагностика + подбор программы → жми кнопку ниже 👇"
+        "🎯 Нажми кнопку ниже, чтобы получить чек-лист 'Топ-5 ошибок в Задаче 8' и пройти диагностику."
     )
     
-    # Отправляем сообщение с двумя типами клавиатур:
-    # 1. start_keyboard — большая кнопка "Начать" внизу (для удобства)
-    # 2. inline_kb — кнопки-ссылки в сообщении (для действий)
     await message.answer(text, reply_markup=start_keyboard)
     await message.answer("Выберите действие:", reply_markup=inline_kb)
     
@@ -73,16 +71,47 @@ async def cmd_start(message: Message):
         try:
             await bot.send_message(ADMIN_ID, admin_text, parse_mode="HTML")
         except Exception as e:
-            logger.error(f"Ошибка отправки уведомления админу: {e}")
+            logger.error(f"Ошибка уведомления админу: {e}")
 
-@dp.message(lambda msg: msg.text == "🚀 Начать")
+# Обработчик нажатия на кнопку "Получить чек-лист"
+@dp.callback_query(lambda c: c.data == "get_checklist")
+async def send_checklist_and_form(callback: CallbackQuery):
+    # Путь к картинке внутри Docker-контейнера
+    image_path = "task8_errors.jpg" 
+    
+    try:
+        # Отправляем фото
+        with open(image_path, "rb") as photo:
+            await callback.message.answer_photo(
+                photo=photo,
+                caption=(
+                    " Вот превью чек-листа «Топ-5 ошибок в Задаче 8»!\n\n"
+                    "Чтобы получить полный PDF-разбор и записаться на бесплатную диагностику, "
+                    "перейди по кнопке ниже 👇"
+                ),
+                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                    [InlineKeyboardButton(text="📝 Открыть форму диагностики", url=FORM_URL)]
+                ])
+            )
+        
+        # Удаляем сообщение с кнопкой, чтобы не дублировать интерфейс (опционально)
+        await callback.answer() 
+        
+    except FileNotFoundError:
+        logger.error("Картинка task8_errors.jpg не найдена!")
+        await callback.message.answer("Извините, картинка временно недоступна. Но вы можете заполнить форму:")
+        await callback.message.answer("📝 Форма диагностики", reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="Заполнить форму", url=FORM_URL)]
+        ]))
+        await callback.answer()
+
+@dp.message(lambda msg: msg.text == " Начать")
 async def handle_start_button(message: Message):
-    """Обрабатываем нажатие на кнопку 'Начать' — просто вызываем ту же логику, что и /start"""
     await cmd_start(message)
 
 @dp.message(~Command("start"))
 async def fallback(message: Message):
-    await message.answer("Используйте команду /start или кнопку 🚀 Бесплатная диагностика для главного меню.", reply_markup=start_keyboard)
+    await message.answer("Используйте команду /start или кнопку 🚀 Начать.", reply_markup=start_keyboard)
 
 async def main():
     app = web.Application()
@@ -98,10 +127,9 @@ async def main():
     try:
         await asyncio.Event().wait()
     except KeyboardInterrupt:
-        logger.info("🛑 Получен сигнал остановки. Завершаем работу...")
+        logger.info("🛑 Остановка...")
     finally:
         await runner.cleanup()
-        logger.info("✅ Сервер корректно остановлен.")
 
 if __name__ == "__main__":
     asyncio.run(main())
